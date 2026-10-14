@@ -1,0 +1,1348 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Quiz a Squadre Live - Master & Player</title>
+  <!-- Google Fonts & Font Awesome -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+  <!-- Firebase v8 per sincronizzazione in tempo reale multi-dispositivo -->
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+
+  <style>
+    :root {
+      --primary: #4f46e5;
+      --primary-dark: #4338ca;
+      --accent: #f59e0b;
+      --success: #10b981;
+      --danger: #ef4444;
+      --bg: #0f172a;
+      --surface: #1e293b;
+      --surface-light: #334155;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --border: #334155;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Top Nav per selezionare il Ruolo (Master / Squadra) */
+    header {
+      background: rgba(30, 41, 59, 0.8);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-family: 'Outfit', sans-serif;
+      font-size: 20px;
+      font-weight: 700;
+      color: #fff;
+    }
+    .brand i { color: var(--accent); }
+    .role-switcher {
+      display: flex;
+      gap: 8px;
+      background: var(--surface-light);
+      padding: 4px;
+      border-radius: 8px;
+    }
+    .role-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 14px;
+      transition: all 0.2s;
+    }
+    .role-btn.active {
+      background: var(--primary);
+      color: #fff;
+      box-shadow: 0 2px 8px rgba(79, 70, 229, 0.4);
+    }
+
+    /* Layout Principale */
+    main {
+      flex: 1;
+      padding: 24px;
+      max-width: 1200px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 28px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+    }
+
+    h1, h2, h3 { font-family: 'Outfit', sans-serif; font-weight: 700; }
+    p { color: var(--text-muted); line-height: 1.5; }
+
+    /* Pulsanti */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      background: var(--primary);
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 10px;
+      font-weight: 600;
+      font-size: 16px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn:hover { background: var(--primary-dark); transform: translateY(-1px); }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+    .btn-accent { background: var(--accent); color: #000; }
+    .btn-accent:hover { background: #d97706; }
+    .btn-success { background: var(--success); }
+    .btn-danger { background: var(--danger); }
+    .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text); }
+    .btn-outline:hover { background: var(--surface-light); }
+
+    /* Modali & Alert */
+    .sync-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      padding: 4px 10px;
+      border-radius: 20px;
+      background: rgba(16, 185, 129, 0.15);
+      color: var(--success);
+    }
+    .sync-badge.offline {
+      background: rgba(239, 68, 68, 0.15);
+      color: var(--danger);
+    }
+
+    /* VISTA MASTER */
+    .master-tabs {
+      display: flex;
+      gap: 12px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 24px;
+      padding-bottom: 12px;
+    }
+    .tab-btn {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      font-size: 16px;
+      font-weight: 600;
+      padding: 8px 16px;
+      cursor: pointer;
+      border-radius: 8px;
+    }
+    .tab-btn.active { background: var(--surface-light); color: #fff; }
+
+    .teams-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 12px;
+      margin: 20px 0;
+    }
+    .team-chip {
+      background: var(--surface-light);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-weight: 600;
+    }
+
+    /* Editor Domande */
+    .question-card {
+      background: var(--surface-light);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 18px;
+      margin-bottom: 16px;
+    }
+    .form-group {
+      margin-bottom: 16px;
+    }
+    .form-group label {
+      display: block;
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 6px;
+      color: var(--text);
+    }
+    .form-control {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 14px;
+      color: #fff;
+      font-size: 15px;
+    }
+    .form-control:focus { outline: none; border-color: var(--primary); }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+    /* VISTA SQUADRA */
+    .player-container {
+      max-width: 650px;
+      margin: 0 auto;
+      text-align: center;
+    }
+    .timer-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin: 20px 0;
+    }
+    .timer-bar-wrap {
+      width: 100%;
+      height: 10px;
+      background: var(--surface-light);
+      border-radius: 5px;
+      overflow: hidden;
+      margin-top: 10px;
+    }
+    .timer-bar {
+      height: 100%;
+      width: 100%;
+      background: var(--accent);
+      transition: width 1s linear;
+    }
+    .timer-num {
+      font-size: 42px;
+      font-weight: 800;
+      color: var(--accent);
+      font-family: 'Outfit', sans-serif;
+    }
+
+    .question-media {
+      margin: 18px 0;
+      max-height: 240px;
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      display: flex;
+      justify-content: center;
+      background: #000;
+    }
+    .question-media img {
+      max-height: 240px;
+      width: auto;
+      max-width: 100%;
+      object-fit: contain;
+    }
+
+    .options-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 12px;
+      margin-top: 20px;
+    }
+    @media(min-width: 600px) {
+      .options-grid { grid-template-columns: 1fr 1fr; }
+    }
+    .option-btn {
+      background: var(--surface-light);
+      border: 2px solid var(--border);
+      border-radius: 12px;
+      padding: 16px 20px;
+      color: #fff;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      text-align: left;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      transition: all 0.2s;
+    }
+    .option-btn:hover:not(:disabled) {
+      background: var(--border);
+      border-color: var(--primary);
+      transform: translateY(-2px);
+    }
+    .option-btn.selected {
+      border-color: var(--primary);
+      background: rgba(79, 70, 229, 0.25);
+    }
+    .option-btn.correct {
+      border-color: var(--success);
+      background: rgba(16, 185, 129, 0.25);
+      color: #34d399;
+    }
+    .option-btn.wrong {
+      border-color: var(--danger);
+      background: rgba(239, 68, 68, 0.25);
+      color: #f87171;
+    }
+
+    /* Classifica Finale */
+    .leaderboard-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 24px 0;
+    }
+    .leaderboard-table th, .leaderboard-table td {
+      padding: 14px 18px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+    .leaderboard-table th {
+      background: var(--surface-light);
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      font-size: 12px;
+      letter-spacing: 0.05em;
+    }
+    .leaderboard-table tr:first-child td {
+      font-weight: 700;
+      color: #f59e0b;
+      font-size: 18px;
+    }
+
+    .pulse {
+      animation: pulseAnim 1.8s infinite;
+    }
+    @keyframes pulseAnim {
+      0% { opacity: 1; }
+      50% { opacity: 0.5; }
+      100% { opacity: 1; }
+    }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+
+  <!-- Barra Superiore di Navigazione e Scelta Ruolo -->
+  <header>
+    <div class="brand">
+      <i class="fa-solid fa-bolt"></i>
+      <span>LiveQuiz Arena</span>
+    </div>
+
+    <div style="display:flex; align-items:center; gap: 16px;">
+      <div id="sync-status" class="sync-badge">
+        <i class="fa-solid fa-satellite-dish"></i>
+        <span id="sync-text">Sincronizzazione Locale (Tab)</span>
+      </div>
+
+      <div class="role-switcher">
+        <button class="role-btn active" id="btn-role-player" onclick="switchRole('player')">
+          <i class="fa-solid fa-gamepad"></i> Squadra
+        </button>
+        <button class="role-btn" id="btn-role-master" onclick="requestMasterAccess()">
+          <i class="fa-solid fa-crown"></i> Master
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Modal di Autenticazione Password Master -->
+  <div id="master-auth-modal" class="hidden" style="position: fixed; inset: 0; background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(8px); z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 20px;">
+    <div class="card" style="max-width: 400px; text-align: center; border: 1px solid var(--border); box-shadow: 0 20px 40px rgba(0,0,0,0.5);">
+      <div style="font-size: 48px; color: var(--accent); margin-bottom: 12px;">
+        <i class="fa-solid fa-lock"></i>
+      </div>
+      <h2>Accesso Riservato Master</h2>
+      <p style="margin: 10px 0 20px 0; font-size: 14px;">Inserisci la password per accedere al pannello di controllo e alla regia live.</p>
+      
+      <form onsubmit="verifyMasterPassword(event)">
+        <div class="form-group">
+          <input type="password" id="input-master-pwd" class="form-control" placeholder="Inserisci Password..." style="text-align: center; font-size: 20px; letter-spacing: 4px; padding: 12px;">
+        </div>
+        <div id="auth-error-msg" style="color: var(--danger); font-size: 14px; font-weight: 600; min-height: 20px; margin-bottom: 12px;"></div>
+        <div style="display: flex; gap: 10px;">
+          <button type="button" class="btn btn-outline" style="flex: 1;" onclick="closeMasterAuthModal()">Annulla</button>
+          <button type="submit" class="btn btn-primary" style="flex: 1;"><i class="fa-solid fa-key"></i> Accedi</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <main>
+
+    <!-- ========================================== -->
+    <!--          SEZIONE 1: VISTA SQUADRA          -->
+    <!-- ========================================== -->
+    <div id="view-player" class="player-container">
+
+      <!-- 1. Iscrizione Squadra -->
+      <div id="player-login-card" class="card">
+        <div style="font-size: 48px; color: var(--accent); margin-bottom: 12px;">
+          <i class="fa-solid fa-users"></i>
+        </div>
+        <h2>Iscrizione Squadra</h2>
+        <p style="margin: 12px 0 24px 0;">Scegliete un nome per il vostro team e preparatevi a sfidare gli altri!</p>
+        <div class="form-group">
+          <input type="text" id="input-team-name" class="form-control" placeholder="Es. I Cervelloni, Team Alpha..." style="font-size: 18px; text-align: center; padding: 14px;">
+        </div>
+        <button class="btn btn-accent" style="width: 100%; font-size: 18px;" onclick="joinQuiz()">
+          <i class="fa-solid fa-right-to-bracket"></i> Registra e Entra
+        </button>
+      </div>
+
+      <!-- 2. Sala d'Attesa (In attesa dell'OK del Master) -->
+      <div id="player-waiting-card" class="card hidden">
+        <div style="font-size: 54px; color: var(--accent); margin-bottom: 16px;" class="pulse">
+          <i class="fa-solid fa-hourglass-half"></i>
+        </div>
+        <h2 id="waiting-team-name">Benvenuti!</h2>
+        <p style="font-size: 18px; margin: 16px 0; color: #fff;">
+          Siete registrati correttamente.
+        </p>
+        <div style="background: var(--surface-light); padding: 18px; border-radius: 12px; margin: 20px 0;">
+          <p style="color: var(--accent); font-weight: 700; font-size: 17px;">
+            <i class="fa-solid fa-circle-notch fa-spin"></i> In attesa del via da parte del MASTER...
+          </p>
+          <p style="font-size: 14px; margin-top: 6px;">Il quiz inizierà appena tutte le squadre saranno pronte.</p>
+        </div>
+        <p style="font-size: 13px;">Squadre attualmente connesse: <strong id="waiting-count">1</strong></p>
+      </div>
+
+      <!-- 3. Schermata Gioco (Domanda attiva) -->
+      <div id="player-game-card" class="card hidden">
+        <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 1px solid var(--border); padding-bottom: 10px;">
+          <span style="font-weight: 700; color: var(--text-muted);" id="q-number-display">Domanda 1 di 10</span>
+          <span style="font-weight: 700; color: var(--accent);" id="player-current-score">Punti: 0</span>
+        </div>
+
+        <!-- Timer circolare / barra -->
+        <div class="timer-container">
+          <div class="timer-num" id="timer-sec">40</div>
+          <div class="timer-bar-wrap">
+            <div id="timer-progress" class="timer-bar"></div>
+          </div>
+        </div>
+
+        <h2 id="q-text" style="margin: 10px 0 16px 0; font-size: 22px;">Testo della domanda...</h2>
+
+        <!-- Eventuale Immagine -->
+        <div id="q-image-container" class="question-media hidden">
+          <img id="q-image" src="" alt="Domanda Illustrata">
+        </div>
+
+        <!-- Opzioni di risposta -->
+        <div class="options-grid" id="options-box">
+          <!-- Popolato via JS -->
+        </div>
+
+        <div id="feedback-box" style="margin-top: 20px; font-weight: 700; font-size: 17px; min-height: 26px;"></div>
+      </div>
+
+      <!-- 4. Classifica Finale per la Squadra -->
+      <div id="player-end-card" class="card hidden">
+        <div style="font-size: 54px; color: var(--accent); margin-bottom: 12px;">
+          <i class="fa-solid fa-trophy"></i>
+        </div>
+        <h2>Quiz Concluso!</h2>
+        <p style="margin-top: 8px;">Ecco i risultati ufficiali calcolati in base a punteggio e tempi di risposta:</p>
+
+        <table class="leaderboard-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Squadra</th>
+              <th>Punti</th>
+              <th>Tempo Tot.</th>
+            </tr>
+          </thead>
+          <tbody id="player-leaderboard-body"></tbody>
+        </table>
+
+        <div style="background: var(--surface-light); padding: 16px; border-radius: 12px; margin-top: 16px;">
+          <p id="player-personal-result" style="color: #fff; font-weight: 600;"></p>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ========================================== -->
+    <!--          SEZIONE 2: VISTA MASTER           -->
+    <!-- ========================================== -->
+    <div id="view-master" class="hidden">
+
+      <div class="master-tabs">
+        <button class="tab-btn active" onclick="switchMasterTab('live')">
+          <i class="fa-solid fa-tower-broadcast"></i> Regia Live
+        </button>
+        <button class="tab-btn" onclick="switchMasterTab('editor')">
+          <i class="fa-solid fa-pen-to-square"></i> Editor Domande & Immagini
+        </button>
+        <button class="tab-btn" onclick="switchMasterTab('config')">
+          <i class="fa-solid fa-gear"></i> Cloud & Fogli Google
+        </button>
+      </div>
+
+      <!-- Tab Master 1: REGIA LIVE -->
+      <div id="master-tab-live">
+        <div class="card" style="margin-bottom: 24px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap: 16px;">
+            <div>
+              <h2>Pannello di Controllo Live</h2>
+              <p>Gestisci l'avvio del quiz, monitora le squadre e fai avanzare le domande.</p>
+            </div>
+            <div style="display:flex; gap: 10px;">
+              <button class="btn btn-outline" onclick="resetGameMaster()">
+                <i class="fa-solid fa-rotate-left"></i> Reset Partita
+              </button>
+              <button id="btn-master-start" class="btn btn-accent" onclick="startQuizFromMaster()">
+                <i class="fa-solid fa-play"></i> AVVIA QUIZ ORA
+              </button>
+              <button id="btn-master-next" class="btn btn-primary hidden" onclick="nextQuestionFromMaster()">
+                <i class="fa-solid fa-forward"></i> Prossima Domanda
+              </button>
+            </div>
+          </div>
+
+          <div style="margin-top: 24px;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <h3><i class="fa-solid fa-users"></i> Squadre Registrate (<span id="master-team-count">0</span>)</h3>
+              <span id="game-status-label" class="sync-badge">Stato: In Attesa di Avvio</span>
+            </div>
+
+            <div class="teams-grid" id="master-teams-list">
+              <p style="color: var(--text-muted); font-style: italic;">Nessuna squadra iscritta al momento.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Proiezione Grande per il Master (Utile su proiettore / maxi-schermo) -->
+        <div class="card" id="master-monitor-card">
+          <h3><i class="fa-solid fa-tv"></i> Schermata di Proiezione Master</h3>
+          <div style="margin-top: 16px; background: #000; border-radius: 12px; padding: 24px; text-align: center;">
+            <div id="master-q-counter" style="color: var(--accent); font-weight: 700; margin-bottom: 8px;">IN ATTESA DELL'AVVIO DEL MASTER</div>
+            <h1 id="master-q-title" style="color: #fff; font-size: 26px;">Le squadre si stanno iscrivendo...</h1>
+            <div id="master-media-box" class="question-media hidden" style="margin: 16px auto;">
+              <img id="master-media-img" src="" alt="Domanda Master">
+            </div>
+            <div id="master-timer-val" style="font-size: 40px; color: var(--accent); font-weight: 800; margin-top: 10px;">40s</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab Master 2: EDITOR DOMANDE -->
+      <div id="master-tab-editor" class="hidden">
+        <div class="card">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 20px;">
+            <div>
+              <h2>Personalizzazione Domande & Immagini</h2>
+              <p>Modifica i testi, le risposte e assegna immagini via URL o caricamento da PC.</p>
+            </div>
+            <div style="display:flex; gap: 10px;">
+              <button class="btn btn-outline" onclick="exportQuestionsJSON()"><i class="fa-solid fa-download"></i> Esporta</button>
+              <button class="btn btn-outline" onclick="importQuestionsPrompt()"><i class="fa-solid fa-upload"></i> Importa</button>
+              <button class="btn btn-success" onclick="addNewQuestion()"><i class="fa-solid fa-plus"></i> Nuova Domanda</button>
+            </div>
+          </div>
+
+          <div id="questions-editor-list">
+            <!-- Popolato con i blocchi delle domande -->
+          </div>
+
+          <button class="btn btn-primary" style="margin-top: 16px; width: 100%;" onclick="saveQuestionsToStorage()">
+            <i class="fa-solid fa-floppy-disk"></i> Salva Modifiche al Quiz
+          </button>
+        </div>
+      </div>
+
+      <!-- Tab Master 3: CONFIGURAZIONE GOOGLE SHEETS & FIREBASE -->
+      <div id="master-tab-config" class="hidden">
+        <div class="card">
+          <h2>Integrazione Google Sheets & Cloud</h2>
+          <p style="margin: 10px 0 24px 0;">Configura il salvataggio automatico delle classifiche su Google Sheets e attiva la sincronizzazione live multi-smartphone con Firebase.</p>
+
+          <div class="form-group">
+            <label><i class="fa-brands fa-google-drive"></i> URL Web App Google Apps Script</label>
+            <input type="text" id="cfg-sheets-url" class="form-control" placeholder="https://script.google.com/macros/s/.../exec">
+            <small style="color: var(--text-muted); display: block; margin-top: 6px;">Incolla qui l'URL dell'applicazione web distribuita da Google Apps Script.</small>
+          </div>
+
+          <hr style="border: 0; border-top: 1px solid var(--border); margin: 24px 0;">
+
+          <h3><i class="fa-solid fa-fire"></i> Firebase Realtime Database (Multi-Telefono Live)</h3>
+          <p style="margin: 8px 0 16px 0; font-size: 14px;">Di base l'app usa il canale locale (perfetto per testare su più schede dello stesso PC). Se le squadre giocano da smartphone diversi, inserisci qui le credenziali gratuite del tuo progetto Firebase:</p>
+          
+          <div class="grid-2">
+            <div class="form-group">
+              <label>API Key</label>
+              <input type="text" id="cfg-fb-key" class="form-control" placeholder="AIzaSy...">
+            </div>
+            <div class="form-group">
+              <label>Database URL</label>
+              <input type="text" id="cfg-fb-url" class="form-control" placeholder="https://tuo-quiz-default-rtdb.firebaseio.com">
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Project ID</label>
+            <input type="text" id="cfg-fb-proj" class="form-control" placeholder="tuo-quiz-id">
+          </div>
+
+          <button class="btn btn-primary" onclick="saveConfigurations()">
+            <i class="fa-solid fa-check"></i> Salva Configurazioni
+          </button>
+        </div>
+      </div>
+
+    </div>
+
+  </main>
+
+  <script>
+    /* ========================================================
+       1. BANCA DOMANDE DI DEFAULT (Personalizzabili)
+       ======================================================== */
+    const DEFAULT_QUESTIONS = [
+      {
+        testo: "1. Qual è l'organo più esteso del corpo umano?",
+        opzioni: ["Il fegato", "I polmoni", "La pelle", "L'intestino"],
+        corretta: 2,
+        immagine: "https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?w=600&auto=format&fit=crop&q=80"
+      },
+      {
+        testo: "2. Quale pianeta del Sistema Solare possiede il maggior numero di anelli visibili?",
+        opzioni: ["Giove", "Saturno", "Urano", "Nettuno"],
+        corretta: 1,
+        immagine: "https://images.unsplash.com/photo-1614732414444-096e5f1122d5?w=600&auto=format&fit=crop&q=80"
+      },
+      {
+        testo: "3. In che anno è caduto il Muro di Berlino?",
+        opzioni: ["1987", "1989", "1991", "1993"],
+        corretta: 1,
+        immagine: "https://images.unsplash.com/photo-1560969184-10fe8719e047?w=600&auto=format&fit=crop&q=80"
+      },
+      {
+        testo: "4. Qual è la capitale dell'Australia?",
+        opzioni: ["Sydney", "Melbourne", "Canberra", "Brisbane"],
+        corretta: 2,
+        immagine: ""
+      },
+      {
+        testo: "5. Chi è l'autore della celebre scultura 'Il David'?",
+        opzioni: ["Leonardo da Vinci", "Donatello", "Michelangelo Buonarroti", "Bernini"],
+        corretta: 2,
+        immagine: "https://images.unsplash.com/photo-1579783902614-a3fb3927b675?w=600&auto=format&fit=crop&q=80"
+      },
+      {
+        testo: "6. Quale elemento chimico ha simbolo chimico 'Fe'?",
+        opzioni: ["Fluoro", "Ferro", "Francio", "Fosforo"],
+        corretta: 1,
+        immagine: ""
+      },
+      {
+        testo: "7. Quanti tasti ha un pianoforte standard da concerto?",
+        opzioni: ["76", "84", "88", "92"],
+        corretta: 2,
+        immagine: "https://images.unsplash.com/photo-1520523839898-507127053c37?w=600&auto=format&fit=crop&q=80"
+      },
+      {
+        testo: "8. Qual è la velocità della luce approssimata nel vuoto?",
+        opzioni: ["300.000 km/s", "150.000 km/s", "1.000.000 km/s", "30.000 km/s"],
+        corretta: 0,
+        immagine: ""
+      },
+      {
+        testo: "9. Quale nazione ha vinto la prima edizione della Coppa del Mondo FIFA nel 1930?",
+        opzioni: ["Brasile", "Argentina", "Uruguay", "Italia"],
+        corretta: 2,
+        immagine: ""
+      },
+      {
+        testo: "10. Qual è il monte più alto d'Europa (secondo la geografia fisica convenzionale)?",
+        opzioni: ["Monte Bianco", "Monte Elbrus", "Cervino", "Etna"],
+        corretta: 1,
+        immagine: "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=600&auto=format&fit=crop&q=80"
+      }
+    ];
+
+    /* ========================================================
+       2. STATO APPLICATIVO
+       ======================================================== */
+    let currentRole = 'player'; // 'player' o 'master'
+    let isMasterAuthenticated = false;
+    const MASTER_PASSWORD = "9577";
+
+    let myTeamName = "";
+    let localScore = 0;
+    let localTotalTime = 0;
+    let hasAnsweredCurrent = false;
+    let questionStartTime = 0;
+    let timerInterval = null;
+    let activeTimerSeconds = 40;
+
+    let quizData = {
+      status: 'waiting', // 'waiting' | 'in_progress' | 'ended'
+      currentQuestionIdx: 0,
+      questionStartTime: 0,
+      teams: {}, // { [name]: { score, totalTime, answers } }
+      questions: []
+    };
+
+    // Canale di Sincronizzazione Locale (BroadcastChannel) per far parlare le schede
+    const bc = new BroadcastChannel('quiz_live_channel');
+
+    // Inizializzazione domande dal LocalStorage o Default
+    function initQuestions() {
+      const saved = localStorage.getItem('livequiz_questions');
+      if (saved) {
+        try { quizData.questions = JSON.parse(saved); }
+        catch(e) { quizData.questions = [...DEFAULT_QUESTIONS]; }
+      } else {
+        quizData.questions = [...DEFAULT_QUESTIONS];
+      }
+    }
+    initQuestions();
+
+    /* ========================================================
+       3. SINCRONIZZAZIONE (Locale + Opzionale Firebase)
+       ======================================================== */
+    let firebaseDb = null;
+    function checkFirebase() {
+      const key = localStorage.getItem('cfg_fb_key');
+      const url = localStorage.getItem('cfg_fb_url');
+      const proj = localStorage.getItem('cfg_fb_proj');
+
+      if (key && url && proj && window.firebase) {
+        try {
+          if (!firebase.apps.length) {
+            firebase.initializeApp({ apiKey: key, databaseURL: url, projectId: proj });
+          }
+          firebaseDb = firebase.database();
+          document.getElementById('sync-status').classList.remove('offline');
+          document.getElementById('sync-text').innerText = "Firebase Cloud Attivo";
+
+          // Ascolta i cambiamenti di stato
+          firebaseDb.ref('quizData').on('value', (snapshot) => {
+            const data = snapshot.val();
+            if (data) {
+              quizData = data;
+              syncUI();
+            }
+          });
+        } catch(err) {
+          console.warn("Errore config Firebase:", err);
+        }
+      }
+    }
+
+    // Invia aggiornamenti di stato agli altri client
+    function broadcastState() {
+      // 1. BroadcastChannel per tab locali
+      bc.postMessage({ type: 'STATE_UPDATE', data: quizData });
+
+      // 2. Se Firebase è configurato, salva su Cloud
+      if (firebaseDb) {
+        firebaseDb.ref('quizData').set(quizData);
+      }
+      syncUI();
+    }
+
+    // Ricezione messaggi da BroadcastChannel
+    bc.onmessage = (event) => {
+      if (event.data && event.data.type === 'STATE_UPDATE') {
+        quizData = event.data.data;
+        syncUI();
+      }
+    };
+
+    /* ========================================================
+       4. CAMBIO RUOLO & AUTHENTICAZIONE MASTER
+       ======================================================== */
+    function requestMasterAccess() {
+      if (currentRole === 'master') return;
+
+      if (isMasterAuthenticated) {
+        switchRole('master');
+      } else {
+        document.getElementById('input-master-pwd').value = "";
+        document.getElementById('auth-error-msg').innerText = "";
+        document.getElementById('master-auth-modal').classList.remove('hidden');
+        setTimeout(() => document.getElementById('input-master-pwd').focus(), 100);
+      }
+    }
+
+    function closeMasterAuthModal() {
+      document.getElementById('master-auth-modal').classList.add('hidden');
+    }
+
+    function verifyMasterPassword(event) {
+      event.preventDefault();
+      const pwdInput = document.getElementById('input-master-pwd').value.trim();
+      
+      if (pwdInput === MASTER_PASSWORD) {
+        isMasterAuthenticated = true;
+        closeMasterAuthModal();
+        switchRole('master');
+      } else {
+        document.getElementById('auth-error-msg').innerText = "Password errata! Riprova.";
+        document.getElementById('input-master-pwd').value = "";
+        document.getElementById('input-master-pwd').focus();
+      }
+    }
+
+    function switchRole(role) {
+      if (role === 'master' && !isMasterAuthenticated) {
+        requestMasterAccess();
+        return;
+      }
+
+      currentRole = role;
+      document.getElementById('btn-role-player').classList.toggle('active', role === 'player');
+      document.getElementById('btn-role-master').classList.toggle('active', role === 'master');
+
+      if (role === 'master') {
+        document.getElementById('view-player').classList.add('hidden');
+        document.getElementById('view-master').classList.remove('hidden');
+        renderMasterEditor();
+      } else {
+        document.getElementById('view-master').classList.add('hidden');
+        document.getElementById('view-player').classList.remove('hidden');
+      }
+      syncUI();
+    }
+
+    function switchMasterTab(tab) {
+      document.querySelectorAll('.master-tabs .tab-btn').forEach(btn => btn.classList.remove('active'));
+      event.target.closest('.tab-btn').classList.add('active');
+
+      document.getElementById('master-tab-live').classList.toggle('hidden', tab !== 'live');
+      document.getElementById('master-tab-editor').classList.toggle('hidden', tab !== 'editor');
+      document.getElementById('master-tab-config').classList.toggle('hidden', tab !== 'config');
+    }
+
+    /* ========================================================
+       5. LOGICA SQUADRA (PLAYER)
+       ======================================================== */
+    function joinQuiz() {
+      const input = document.getElementById('input-team-name').value.trim();
+      if (!input) {
+        alert("Inserisci il nome della tua squadra!");
+        return;
+      }
+      myTeamName = input;
+      if (!quizData.teams) quizData.teams = {};
+      
+      if (!quizData.teams[myTeamName]) {
+        quizData.teams[myTeamName] = {
+          score: 0,
+          totalTime: 0,
+          answers: {}
+        };
+      }
+
+      broadcastState();
+
+      document.getElementById('player-login-card').classList.add('hidden');
+      document.getElementById('waiting-team-name').innerText = "Squadra: " + myTeamName;
+      syncUI();
+    }
+
+    function submitAnswer(chosenIndex) {
+      if (hasAnsweredCurrent) return;
+      hasAnsweredCurrent = true;
+
+      const elapsed = Math.min(40, ((Date.now() - questionStartTime) / 1000));
+      const currentQ = quizData.questions[quizData.currentQuestionIdx];
+      const isCorrect = (chosenIndex === currentQ.corretta);
+
+      // Aggiorna punteggio: +3 corretto, -1 errato
+      const pointsDelta = isCorrect ? 3 : -1;
+      localScore += pointsDelta;
+      localTotalTime += elapsed;
+
+      // Aggiorna lo stato della squadra
+      if (myTeamName && quizData.teams[myTeamName]) {
+        quizData.teams[myTeamName].score = localScore;
+        quizData.teams[myTeamName].totalTime = parseFloat(localTotalTime.toFixed(2));
+        if (!quizData.teams[myTeamName].answers) quizData.teams[myTeamName].answers = {};
+        quizData.teams[myTeamName].answers[quizData.currentQuestionIdx] = {
+          choice: chosenIndex,
+          time: elapsed,
+          correct: isCorrect
+        };
+        broadcastState();
+      }
+
+      // Feedback visivo immediato sui pulsanti
+      const buttons = document.querySelectorAll('.option-btn');
+      buttons.forEach((btn, idx) => {
+        btn.disabled = true;
+        if (idx === chosenIndex) {
+          btn.classList.add('selected');
+        }
+      });
+
+      const fb = document.getElementById('feedback-box');
+      if (chosenIndex === -1) {
+        fb.innerHTML = `<span style="color:var(--danger);"><i class="fa-solid fa-clock"></i> Tempo scaduto! (-1 punto)</span>`;
+      } else if (isCorrect) {
+        fb.innerHTML = `<span style="color:var(--success);"><i class="fa-solid fa-check"></i> Risposta registrata! (+3 punti in ${elapsed.toFixed(1)}s)</span>`;
+      } else {
+        fb.innerHTML = `<span style="color:var(--danger);"><i class="fa-solid fa-xmark"></i> Risposta errata! (-1 punto)</span>`;
+      }
+    }
+
+    /* ========================================================
+       6. LOGICA MASTER (REGIA)
+       ======================================================== */
+    function startQuizFromMaster() {
+      const teamKeys = Object.keys(quizData.teams || {});
+      if (teamKeys.length === 0) {
+        if (!confirm("Nessuna squadra è ancora registrata. Vuoi comunque avviare il quiz?")) {
+          return;
+        }
+      }
+
+      quizData.status = 'in_progress';
+      quizData.currentQuestionIdx = 0;
+      quizData.questionStartTime = Date.now();
+
+      // Reset punteggi
+      for (let t in quizData.teams) {
+        quizData.teams[t].score = 0;
+        quizData.teams[t].totalTime = 0;
+        quizData.teams[t].answers = {};
+      }
+
+      broadcastState();
+    }
+
+    function nextQuestionFromMaster() {
+      if (quizData.currentQuestionIdx + 1 < quizData.questions.length) {
+        quizData.currentQuestionIdx++;
+        quizData.questionStartTime = Date.now();
+        broadcastState();
+      } else {
+        // Conclusione Quiz
+        quizData.status = 'ended';
+        broadcastState();
+        sendResultsToGoogleSheets();
+      }
+    }
+
+    function resetGameMaster() {
+      if (confirm("Sei sicuro di voler resettare la partita e tornare alla sala d'attesa?")) {
+        quizData.status = 'waiting';
+        quizData.currentQuestionIdx = 0;
+        quizData.teams = {};
+        broadcastState();
+      }
+    }
+
+    /* ========================================================
+       7. SINCRONIZZAZIONE DELLA UI IN BASE ALLO STATO
+       ======================================================== */
+    function syncUI() {
+      // 1. Aggiorna conteggi Master
+      const teamList = Object.keys(quizData.teams || {});
+      document.getElementById('master-team-count').innerText = teamList.length;
+      document.getElementById('waiting-count').innerText = teamList.length;
+
+      const masterTeamsContainer = document.getElementById('master-teams-list');
+      if (teamList.length === 0) {
+        masterTeamsContainer.innerHTML = `<p style="color: var(--text-muted); font-style: italic;">Nessuna squadra iscritta al momento.</p>`;
+      } else {
+        masterTeamsContainer.innerHTML = teamList.map(name => {
+          const t = quizData.teams[name];
+          return `<div class="team-chip">
+                    <span><i class="fa-solid fa-users" style="color:var(--accent); margin-right:8px;"></i>${name}</span>
+                    <span style="color:var(--accent);">${t.score} pt (${t.totalTime}s)</span>
+                  </div>`;
+        }).join('');
+      }
+
+      // Stato etichetta Master
+      const statusLabel = document.getElementById('game-status-label');
+      const btnStart = document.getElementById('btn-master-start');
+      const btnNext = document.getElementById('btn-master-next');
+
+      if (quizData.status === 'waiting') {
+        statusLabel.innerText = "Stato: In Attesa dell'OK del Master";
+        btnStart.classList.remove('hidden');
+        btnNext.classList.add('hidden');
+      } else if (quizData.status === 'in_progress') {
+        statusLabel.innerText = `Stato: Domanda ${quizData.currentQuestionIdx + 1} di ${quizData.questions.length}`;
+        btnStart.classList.add('hidden');
+        btnNext.classList.remove('hidden');
+      } else {
+        statusLabel.innerText = "Stato: Quiz Concluso";
+        btnStart.classList.remove('hidden');
+        btnNext.classList.add('hidden');
+      }
+
+      // Proiezione Master Schermo
+      if (quizData.status === 'in_progress' && quizData.questions[quizData.currentQuestionIdx]) {
+        const q = quizData.questions[quizData.currentQuestionIdx];
+        document.getElementById('master-q-counter').innerText = `DOMANDA ${quizData.currentQuestionIdx + 1} DI ${quizData.questions.length}`;
+        document.getElementById('master-q-title').innerText = q.testo;
+
+        const mediaBox = document.getElementById('master-media-box');
+        const mediaImg = document.getElementById('master-media-img');
+        if (q.immagine) {
+          mediaImg.src = q.immagine;
+          mediaBox.classList.remove('hidden');
+        } else {
+          mediaBox.classList.add('hidden');
+        }
+      } else if (quizData.status === 'ended') {
+        document.getElementById('master-q-counter').innerText = `QUIZ TERMINATO`;
+        document.getElementById('master-q-title').innerText = `Consulta la classifica finale qui sotto o sul Foglio Google`;
+        document.getElementById('master-media-box').classList.add('hidden');
+      }
+
+      // UI SQUADRA
+      if (currentRole === 'player') {
+        const waitingCard = document.getElementById('player-waiting-card');
+        const gameCard = document.getElementById('player-game-card');
+        const endCard = document.getElementById('player-end-card');
+        const loginCard = document.getElementById('player-login-card');
+
+        if (!myTeamName) {
+          loginCard.classList.remove('hidden');
+          waitingCard.classList.add('hidden');
+          gameCard.classList.add('hidden');
+          endCard.classList.add('hidden');
+          return;
+        }
+
+        loginCard.classList.add('hidden');
+
+        if (quizData.status === 'waiting') {
+          waitingCard.classList.remove('hidden');
+          gameCard.classList.add('hidden');
+          endCard.classList.add('hidden');
+        } else if (quizData.status === 'in_progress') {
+          waitingCard.classList.add('hidden');
+          gameCard.classList.remove('hidden');
+          endCard.classList.add('hidden');
+          renderCurrentQuestionPlayer();
+        } else if (quizData.status === 'ended') {
+          waitingCard.classList.add('hidden');
+          gameCard.classList.add('hidden');
+          endCard.classList.remove('hidden');
+          renderLeaderboard();
+        }
+      }
+    }
+
+    /* ========================================================
+       8. GESTIONE DOMANDA E TIMER 40s
+       ======================================================== */
+    let lastRenderedIdx = -1;
+
+    function renderCurrentQuestionPlayer() {
+      const qIdx = quizData.currentQuestionIdx;
+      const q = quizData.questions[qIdx];
+      if (!q) return;
+
+      // Se la domanda è cambiata, reimposta il turno di risposta
+      if (lastRenderedIdx !== qIdx) {
+        lastRenderedIdx = qIdx;
+        hasAnsweredCurrent = false;
+        questionStartTime = quizData.questionStartTime || Date.now();
+        document.getElementById('feedback-box').innerHTML = "";
+
+        // Testo & Numero
+        document.getElementById('q-number-display').innerText = `Domanda ${qIdx + 1} di ${quizData.questions.length}`;
+        document.getElementById('q-text').innerText = q.testo;
+        document.getElementById('player-current-score').innerText = `Punti: ${localScore}`;
+
+        // Immagine se presente
+        const imgContainer = document.getElementById('q-image-container');
+        const imgTag = document.getElementById('q-image');
+        if (q.immagine && q.immagine.trim() !== "") {
+          imgTag.src = q.immagine;
+          imgContainer.classList.remove('hidden');
+        } else {
+          imgContainer.classList.add('hidden');
+        }
+
+        // Opzioni
+        const optContainer = document.getElementById('options-box');
+        optContainer.innerHTML = "";
+        q.opzioni.forEach((optText, index) => {
+          const btn = document.createElement('button');
+          btn.className = "option-btn";
+          btn.innerHTML = `<span style="color:var(--accent); font-weight:800;">${String.fromCharCode(65 + index)}.</span> ${optText}`;
+          btn.onclick = () => submitAnswer(index);
+          optContainer.appendChild(btn);
+        });
+
+        // Gestione Timer 40s
+        startTimer();
+      }
+    }
+
+    function startTimer() {
+      clearInterval(timerInterval);
+      const totalSeconds = 40;
+      
+      const updateClock = () => {
+        const elapsed = Math.floor((Date.now() - questionStartTime) / 1000);
+        let remain = Math.max(0, totalSeconds - elapsed);
+        
+        document.getElementById('timer-sec').innerText = remain;
+        document.getElementById('master-timer-val').innerText = remain + "s";
+        
+        const pct = (remain / totalSeconds) * 100;
+        document.getElementById('timer-progress').style.width = pct + "%";
+
+        if (remain <= 0) {
+          clearInterval(timerInterval);
+          if (!hasAnsweredCurrent) {
+            submitAnswer(-1); // Tempo scaduto: risposta errata (-1)
+          }
+        }
+      };
+
+      updateClock();
+      timerInterval = setInterval(updateClock, 500);
+    }
+
+    /* ========================================================
+       9. CLASSIFICA FINALE & GOOGLE SHEETS
+       ======================================================== */
+    function getSortedLeaderboard() {
+      const teamsArr = Object.entries(quizData.teams || {}).map(([name, data]) => ({
+        name: name,
+        score: data.score,
+        totalTime: data.totalTime || 0
+      }));
+
+      // Ordinamento: 1) Punti (Decrescente) 2) In caso di parità, Tempo Totale (Crescente)
+      teamsArr.sort((a, b) => {
+        if (b.score !== a.score) {
+          return b.score - a.score;
+        }
+        return a.totalTime - b.totalTime;
+      });
+
+      return teamsArr;
+    }
+
+    function renderLeaderboard() {
+      const ranking = getSortedLeaderboard();
+      const tbody = document.getElementById('player-leaderboard-body');
+      tbody.innerHTML = "";
+
+      ranking.forEach((team, idx) => {
+        const isMyTeam = team.name === myTeamName;
+        const tr = document.createElement('tr');
+        if (isMyTeam) tr.style.background = "rgba(79, 70, 229, 0.2)";
+        tr.innerHTML = `
+          <td><strong>${idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : idx + 1}</strong></td>
+          <td><strong>${team.name}</strong> ${isMyTeam ? '(Voi)' : ''}</td>
+          <td><strong style="color:var(--accent);">${team.score}</strong></td>
+          <td>${team.totalTime.toFixed(1)}s</td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      // Risultato personale
+      const myRank = ranking.findIndex(t => t.name === myTeamName) + 1;
+      const resMsg = document.getElementById('player-personal-result');
+      if (myRank > 0) {
+        resMsg.innerHTML = `Vostro Piazzamento Finale: <strong>#${myRank}</strong> con <strong>${localScore} punti</strong> e tempo di risposta complessivo di <strong>${localTotalTime.toFixed(1)} secondi</strong>.`;
+      }
+    }
+
+    function sendResultsToGoogleSheets() {
+      const url = localStorage.getItem('cfg_sheets_url');
+      if (!url) return;
+
+      const ranking = getSortedLeaderboard();
+      fetch(url, {
+        method: "POST",
+        mode: "no-cors",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          dataOra: new Date().toISOString(),
+          classifica: ranking
+        })
+      }).then(() => {
+        console.log("Dati inviati a Google Sheets!");
+      }).catch(err => console.error("Errore invio Google Sheets:", err));
+    }
+
+    /* ========================================================
+       10. EDITOR DOMANDE & IMMAGINI (MASTER)
+       ======================================================== */
+    function renderMasterEditor() {
+      const container = document.getElementById('questions-editor-list');
+      container.innerHTML = "";
+
+      quizData.questions.forEach((q, idx) => {
+        const card = document.createElement('div');
+        card.className = "question-card";
+        card.innerHTML = `
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+            <strong style="color:var(--accent); font-size:16px;">Domanda #${idx + 1}</strong>
+            <button class="btn btn-danger" style="padding:6px 12px; font-size:13px;" onclick="deleteQuestion(${idx})">
+              <i class="fa-solid fa-trash"></i> Elimina
+            </button>
+          </div>
+
+          <div class="form-group">
+            <label>Testo Domanda</label>
+            <input type="text" class="form-control" value="${escapeHtml(q.testo)}" onchange="updateQText(${idx}, this.value)">
+          </div>
+
+          <div class="form-group">
+            <label><i class="fa-regular fa-image"></i> Immagine (URL oppure carica file dal PC)</label>
+            <div style="display:flex; gap:10px;">
+              <input type="text" class="form-control" placeholder="Incolla URL immagine (https://...)" value="${escapeHtml(q.immagine || '')}" onchange="updateQImage(${idx}, this.value)">
+              <label class="btn btn-outline" style="white-space:nowrap; cursor:pointer;">
+                <i class="fa-solid fa-folder-open"></i> Carica da PC
+                <input type="file" accept="image/*" style="display:none;" onchange="uploadImageFromFile(${idx}, this)">
+              </label>
+            </div>
+            ${q.immagine ? `<div style="margin-top:8px;"><img src="${q.immagine}" style="max-height:80px; border-radius:6px; border:1px solid var(--border);"></div>` : ''}
+          </div>
+
+          <div class="grid-2">
+            ${q.opzioni.map((opt, oIdx) => `
+              <div class="form-group">
+                <label>Opzione ${String.fromCharCode(65 + oIdx)} ${oIdx === q.corretta ? '<span style="color:var(--success); font-weight:700;">(Corretta)</span>' : ''}</label>
+                <div style="display:flex; gap:8px;">
+                  <input type="text" class="form-control" value="${escapeHtml(opt)}" onchange="updateQOption(${idx}, ${oIdx}, this.value)">
+                  <button class="btn ${oIdx === q.corretta ? 'btn-success' : 'btn-outline'}" style="padding:8px 12px;" onclick="setCorrectOption(${idx}, ${oIdx})" title="Imposta come corretta">
+                    <i class="fa-solid fa-check"></i>
+                  </button>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    function updateQText(idx, val) { quizData.questions[idx].testo = val; }
+    function updateQImage(idx, val) { quizData.questions[idx].immagine = val; renderMasterEditor(); }
+    function updateQOption(qIdx, optIdx, val) { quizData.questions[qIdx].opzioni[optIdx] = val; }
+    function setCorrectOption(qIdx, optIdx) {
+      quizData.questions[qIdx].corretta = optIdx;
+      renderMasterEditor();
+    }
+    function deleteQuestion(idx) {
+      if (confirm("Vuoi eliminare questa domanda?")) {
+        quizData.questions.splice(idx, 1);
+        renderMasterEditor();
+      }
+    }
+    function addNewQuestion() {
+      quizData.questions.push({
+        testo: `Nuova Domanda ${quizData.questions.length + 1}`,
+        opzioni: ["Opzione A", "Opzione B", "Opzione C", "Opzione D"],
+        corretta: 0,
+        immagine: ""
+      });
+      renderMasterEditor();
+    }
+
+    function uploadImageFromFile(qIdx, input) {
+      const file = input.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          quizData.questions[qIdx].immagine = e.target.result;
+          renderMasterEditor();
+        };
+        reader.readAsDataURL(file);
+      }
+    }
+
+    function saveQuestionsToStorage() {
+      localStorage.setItem('livequiz_questions', JSON.stringify(quizData.questions));
+      broadcastState();
+      alert("Domande salvate con successo!");
+    }
+
+    function exportQuestionsJSON() {
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(quizData.questions, null, 2));
+      const a = document.createElement('a');
+      a.href = dataStr;
+      a.download = "domande_quiz.json";
+      a.click();
+    }
+
+    function importQuestionsPrompt() {
+      const jsonStr = prompt("Incolla qui il JSON con le domande:");
+      if (jsonStr) {
+        try {
+          const parsed = JSON.parse(jsonStr);
+          if (Array.isArray(parsed)) {
+            quizData.questions = parsed;
+            renderMasterEditor();
+            saveQuestionsToStorage();
+          }
+        } catch(e) {
+          alert("Formato JSON non valido!");
+        }
+      }
+    }
+
+    function escapeHtml(text) {
+      if (!text) return "";
+      return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    }
+
+    /* ========================================================
+       11. CONFIGURAZIONI (FOGLIO GOOGLE & FIREBASE)
+       ======================================================== */
+    function loadSavedConfigurations() {
+      document.getElementById('cfg-sheets-url').value = localStorage.getItem('cfg_sheets_url') || "";
+      document.getElementById('cfg-fb-key').value = localStorage.getItem('cfg_fb_key') || "";
+      document.getElementById('cfg-fb-url').value = localStorage.getItem('cfg_fb_url') || "";
+      document.getElementById('cfg-fb-proj').value = localStorage.getItem('cfg_fb_proj') || "";
+    }
+    function saveConfigurations() {
+      localStorage.setItem('cfg_sheets_url', document.getElementById('cfg-sheets-url').value.trim());
+      localStorage.setItem('cfg_fb_key', document.getElementById('cfg-fb-key').value.trim());
+      localStorage.setItem('cfg_fb_url', document.getElementById('cfg-fb-url').value.trim());
+      localStorage.setItem('cfg_fb_proj', document.getElementById('cfg-fb-proj').value.trim());
+      alert("Configurazioni salvate!");
+      checkFirebase();
+    }
+
+    // Inizializzazione al caricamento
+    window.addEventListener('DOMContentLoaded', () => {
+      loadSavedConfigurations();
+      checkFirebase();
+      syncUI();
+    });
+  </script>
+</body>
+</html>
